@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Aircraft Exam Timer</title>
+
+<!-- Realtime phone ↔ laptop connection -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<style>
+
+* {
+box-sizing: border-box;
+}
+
+body {
+margin: 0;
+font-family: Arial, sans-serif;
+background: #f4f5f7;
+color: #111;
+}
+
+/* =========================
+HEADER
+========================= */
+
+header {
+background: #111;
+color: white;
+padding: 18px 24px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+header h1 {
+margin: 0;
+font-size: 24px;
+}
+
+.room-display {
+font-size: 18px;
+font-weight: bold;
+}
+
+.room-code {
+background: white;
+color: black;
+padding: 7px 12px;
+border-radius: 8px;
+letter-spacing: 4px;
+margin-left: 5px;
+}
+
+/* =========================
+MAIN & SHARED CONTAINER
+========================= */
+
+main {
+padding: 20px;
+max-width: 1400px;
+margin: auto;
+}
+
+/* =========================
+TOP CONTROLS
+========================= */
+
+.top-controls {
+display: flex;
+gap: 10px;
+flex-wrap: wrap;
+margin-bottom: 20px;
+}
+
+button {
+border: none;
+border-radius: 9px;
+padding: 12px 16px;
+font-weight: bold;
+cursor: pointer;
+background: #111;
+color: white;
+}
+
+button:hover {
+opacity: 0.85;
+}
+
+button.secondary {
+background: #e5e7eb;
+color: #111;
+}
+
+button.danger {
+background: #b91c1c;
+}
+
+.connection-status {
+background: #e5e7eb;
+padding: 12px 16px;
+border-radius: 9px;
+font-weight: bold;
+}
+
+/* =========================
+PARTICIPANTS GRID (SHARED)
+========================= */
+
+.participants-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+gap: 15px;
+}
+
+.participant {
+background: white;
+border: 1px solid #ddd;
+border-radius: 14px;
+padding: 16px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.participant-name-input {
+font-size: 18px;
+font-weight: bold;
+margin-bottom: 10px;
+width: 100%;
+padding: 6px 8px;
+border: 1px solid #ccc;
+border-radius: 6px;
+}
+
+.participant-name-input:focus {
+border-color: #111;
+outline: none;
+background: #fdfdfd;
+}
+
+.stage {
+text-align: center;
+font-size: 18px;
+font-weight: bold;
+margin-bottom: 10px;
+}
+
+.timer {
+font-size: 48px;
+font-weight: bold;
+text-align: center;
+padding: 18px 5px;
+border-radius: 10px;
+margin-bottom: 12px;
+}
+
+.timer-open {
+background: #e8f4ff;
+}
+
+.timer-closed {
+background: #fff3cd;
+}
+
+.timer-aircraft {
+background: #e8f5e9;
+}
+
+.timer-done {
+background: #eeeeee;
+}
+
+.timer-disabled {
+background: #eeeeee;
+color: #777;
+}
+
+.participant-controls {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+}
+
+.participant-controls button:last-child {
+grid-column: 1 / -1;
+}
+
+/* =========================
+JOIN MODAL
+========================= */
+
+.modal {
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,0.65);
+display: none;
+align-items: center;
+justify-content: center;
+padding: 20px;
+z-index: 100;
+}
+
+.modal.show {
+display: flex;
+}
+
+.modal-card {
+background: white;
+border-radius: 18px;
+padding: 28px;
+width: 100%;
+max-width: 420px;
+}
+
+.modal-card h2 {
+margin-top: 0;
+}
+
+.modal-card input {
+width: 100%;
+padding: 15px;
+font-size: 25px;
+text-align: center;
+letter-spacing: 5px;
+border: 1px solid #aaa;
+border-radius: 9px;
+margin: 12px 0;
+}
+
+/* =========================
+PHONE REMOTE VIEW
+========================= */
+
+#remoteView {
+display: none;
+}
+
+.small-text {
+color: #666;
+font-size: 13px;
+}
+
+@media (max-width: 600px) {
+
+header {
+padding: 14px;
+}
+
+header h1 {
+font-size: 19px;
+}
+
+.room-display {
+font-size: 13px;
+}
+
+main {
+padding: 12px;
+}
+
+.participants-grid {
+grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+gap: 10px;
+}
+
+.timer {
+font-size: 36px;
+padding: 10px 5px;
+}
+
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- =====================================================
+HEADER
+===================================================== -->
+
+<header>
+
+<h1>
+Aircraft Exam Timer
+</h1>
+
+<div class="room-display">
+
+ROOM:
+
+<span
+class="room-code"
+id="roomCodeDisplay">
+----
+</span>
+
+</div>
+
+</header>
+
+
+<!-- =====================================================
+LAPTOP VIEW
+===================================================== -->
+
+<main id="laptopView">
+
+<div class="top-controls">
+
+<button onclick="createRoom()">
+Create New Room
+</button>
+
+<button
+class="secondary"
+onclick="openJoinModal()">
+
+Join Existing Room
+
+</button>
+
+<button onclick="addParticipant()">
+
++ Add Participant
+
+</button>
+
+<button onclick="startAllOpen()">
+
+▶ Start Open For All
+
+</button>
+
+<div
+class="connection-status"
+id="connectionStatus">
+
+Creating room...
+
+</div>
+
+</div>
+
+
+<div id="participants" class="participants-grid"></div>
+
+</main>
+
+
+<!-- =====================================================
+PHONE REMOTE VIEW
+===================================================== -->
+
+<main id="remoteView">
+
+<div class="top-controls">
+
+<button onclick="remoteCommand('startAll')">
+▶ Start Open For All
+</button>
+
+<button class="secondary" onclick="remoteCommand('add')">
++ Add Participant
+</button>
+
+<button class="danger" onclick="disconnectRemote()">
+Disconnect
+</button>
+
+<div class="connection-status" id="remoteStatus">
+Connecting...
+</div>
+
+</div>
+
+<div id="remoteParticipants" class="participants-grid"></div>
+
+</main>
+
+
+<!-- =====================================================
+JOIN ROOM MODAL
+===================================================== -->
+
+<div
+class="modal"
+id="joinModal">
+
+<div class="modal-card">
+
+<h2>
+Join Classroom
+</h2>
+
+<p>
+Enter the 4-digit room code shown
+on the laptop.
+</p>
+
+<input
+id="roomInput"
+maxlength="4"
+inputmode="numeric"
+placeholder="4821">
+
+<button
+style="width:100%"
+onclick="joinRoom()">
+
+JOIN ROOM
+
+</button>
+
+<button
+class="secondary"
+style="width:100%; margin-top:8px"
+onclick="closeJoinModal()">
+
+Cancel
+
+</button>
+
+<p
+class="small-text"
+id="joinMessage">
+
+</p>
+
+</div>
+
+</div>
+
+
+<script>
+
+/* =====================================================
+TIMER SETTINGS
+===================================================== */
+
+const OPEN_SECONDS = 15 * 60;
+const CLOSED_SECONDS = 15 * 60;
+const AIRCRAFT_SECONDS = 30 * 60;
+const MAX_PARTICIPANTS = 22;
+
+
+/* =====================================================
+VARIABLES
+===================================================== */
+
+let participants = [];
+let nextParticipantID = 1;
+let roomCode = "";
+let hostPeer = null;
+let remotePeer = null;
+let remoteConnection = null;
+let remoteConnections = [];
+let isRemote = false;
+
+
+/* =====================================================
+RANDOM ROOM CODE
+===================================================== */
+
+function generateRoomCode() {
+return String(
+Math.floor(
+1000 +
+Math.random() * 9000
+)
+);
+}
+
+
+/* =====================================================
+DISPLAY ROOM CODE
+===================================================== */
+
+function setRoomCode(code) {
+roomCode = code;
+document.getElementById(
+"roomCodeDisplay"
+).textContent = code;
+}
+
+
+/* =====================================================
+CREATE LAPTOP ROOM
+===================================================== */
+
+function createRoom() {
+if (hostPeer) {
+try {
+hostPeer.destroy();
+}
+catch(e) {}
+}
+
+const code = generateRoomCode();
+setRoomCode(code);
+
+document.getElementById(
+"connectionStatus"
+).textContent = "Connecting...";
+
+hostPeer = new Peer("aircraft-timer-" + code);
+
+hostPeer.on("open", function() {
+document.getElementById(
+"connectionStatus"
+).textContent = "Room ready — phone can join";
+});
+
+hostPeer.on("connection", function(connection) {
+remoteConnections.push(connection);
+
+connection.on("open", function() {
+connection.send({
+type: "state",
+state: collectState()
+});
+});
+
+connection.on("data", function(data) {
+handleRemoteCommand(data);
+});
+
+connection.on("close", function() {
+remoteConnections = remoteConnections.filter(function(c) {
+return c !== connection;
+});
+});
+});
+
+hostPeer.on("error", function(error) {
+console.log(error);
+document.getElementById(
+"connectionStatus"
+).textContent = "Connection error — create a new room";
+});
+}
+
+
+/* =====================================================
+JOIN MODAL
+===================================================== */
+
+function openJoinModal() {
+document.getElementById("joinModal").classList.add("show");
+document.getElementById("roomInput").focus();
+}
+
+function closeJoinModal() {
+document.getElementById("joinModal").classList.remove("show");
+}
+
+
+/* =====================================================
+PHONE JOINS ROOM
+===================================================== */
+
+function joinRoom() {
+const code = document.getElementById("roomInput").value.trim();
+
+if (!/^\d{4}$/.test(code)) {
+document.getElementById("joinMessage").textContent = "Please enter a 4-digit room code.";
+return;
+}
+
+document.getElementById("joinMessage").textContent = "Connecting...";
+
+remotePeer = new Peer();
+
+remotePeer.on("open", function() {
+remoteConnection = remotePeer.connect("aircraft-timer-" + code, {
+reliable: true
+});
+
+remoteConnection.on("open", function() {
+isRemote = true;
+document.getElementById("laptopView").style.display = "none";
+document.getElementById("remoteView").style.display = "block";
+document.getElementById("remoteStatus").textContent = "Connected to Room " + code;
+closeJoinModal();
+});
+
+remoteConnection.on("data", function(data) {
+if (data.type === "state") {
+renderRemote(data.state);
+}
+});
+
+remoteConnection.on("close", function() {
+document.getElementById("remoteStatus").textContent = "Disconnected from laptop";
+});
+});
+
+remotePeer.on("error", function(error) {
+console.log(error);
+document.getElementById("joinMessage").textContent = "Could not connect. Check the room code.";
+});
+}
+
+
+/* =====================================================
+ADD PARTICIPANT
+===================================================== */
+
+function addParticipant() {
+if (participants.length >= MAX_PARTICIPANTS) {
+alert("Maximum participants reached.");
+return;
+}
+
+const participant = {
+id: nextParticipantID++,
+name: "Participant " + (participants.length + 1),
+stage: "READY",
+seconds: 0,
+running: false,
+interval: null
+};
+
+participants.push(participant);
+renderLaptop();
+broadcastState();
+}
+
+
+/* =====================================================
+UPDATE PARTICIPANT NAME
+===================================================== */
+
+function updateParticipantName(id, newName) {
+const participant = participants.find(function(p) {
+return p.id === id;
+});
+
+if (participant) {
+participant.name = newName;
+broadcastState();
+}
+}
+
+
+/* =====================================================
+DISABLE PARTICIPANT
+===================================================== */
+
+function disableParticipant(id) {
+const participant = participants.find(function(p) {
+return p.id === id;
+});
+
+if (!participant) return;
+
+clearInterval(participant.interval);
+participant.running = false;
+participant.stage = "DISABLED";
+participant.seconds = 0;
+
+renderLaptop();
+broadcastState();
+}
+
+
+/* =====================================================
+START ALL
+===================================================== */
+
+function startAllOpen() {
+participants.forEach(function(participant) {
+if (participant.stage === "DISABLED") {
+return;
+}
+
+startStage(
+participant.id,
+OPEN_SECONDS,
+"OPEN",
+function() {
+startStage(
+participant.id,
+CLOSED_SECONDS,
+"CLOSED",
+function() {
+startStage(
+participant.id,
+AIRCRAFT_SECONDS,
+"AIRCRAFT",
+function() {
+const p = participants.find(function(x) {
+return x.id === participant.id;
+});
+
+if (p) {
+p.stage = "DONE";
+p.seconds = 0;
+p.running = false;
+}
+
+renderLaptop();
+broadcastState();
+}
+);
+}
+);
+}
+);
+});
+}
+
+
+/* =====================================================
+START INDIVIDUAL STAGE
+===================================================== */
+
+function startStage(id, duration, stage, callback) {
+const participant = participants.find(function(p) {
+return p.id === id;
+});
+
+if (!participant) return;
+if (participant.stage === "DISABLED") return;
+
+clearInterval(participant.interval);
+
+participant.stage = stage;
+participant.seconds = duration;
+participant.running = true;
+
+renderLaptop();
+broadcastState();
+
+participant.interval = setInterval(function() {
+participant.seconds = Math.max(0, participant.seconds - 1);
+
+renderLaptop();
+broadcastState();
+
+if (participant.seconds <= 0) {
+clearInterval(participant.interval);
+participant.running = false;
+
+if (callback) {
+callback();
+} else {
+participant.stage = "DONE";
+renderLaptop();
+broadcastState();
+}
+}
+}, 1000);
+}
+
+
+/* =====================================================
+FORMAT TIMER
+===================================================== */
+
+function formatTime(seconds) {
+const minutes = Math.floor(seconds / 60);
+const remainingSeconds = seconds % 60;
+
+return (
+String(minutes).padStart(2, "0") +
+":" +
+String(remainingSeconds).padStart(2, "0")
+);
+}
+
+
+/* =====================================================
+LAPTOP DISPLAY
+===================================================== */
+
+function renderLaptop() {
+const container = document.getElementById("participants");
+container.innerHTML = "";
+
+participants.forEach(function(participant) {
+const card = document.createElement("div");
+card.className = "participant";
+
+let timerClass = "timer-done";
+if (participant.stage === "OPEN") {
+timerClass = "timer-open";
+} else if (participant.stage === "CLOSED") {
+timerClass = "timer-closed";
+} else if (participant.stage === "AIRCRAFT") {
+timerClass = "timer-aircraft";
+}
+
+let timerText = "--:--";
+if (participant.stage === "DISABLED") {
+timerText = "DISABLED";
+} else if (participant.stage === "DONE") {
+timerText = "DONE";
+} else if (
+participant.stage === "OPEN" ||
+participant.stage === "CLOSED" ||
+participant.stage === "AIRCRAFT"
+) {
+timerText = formatTime(participant.seconds);
+}
+
+card.innerHTML = `
+<input
+type="text"
+class="participant-name-input"
+value="${escapeHTML(participant.name)}"
+onchange="updateParticipantName(${participant.id}, this.value)"
+/>
+
+<div class="stage">
+${participant.stage}
+</div>
+
+<div class="timer ${timerClass}">
+${timerText}
+</div>
+
+<div class="participant-controls">
+<button onclick="startStage(${participant.id}, ${CLOSED_SECONDS}, 'CLOSED')">
+CLOSED
+</button>
+
+<button onclick="startStage(${participant.id}, ${AIRCRAFT_SECONDS}, 'AIRCRAFT')">
+AIRCRAFT
+</button>
+
+<button class="danger" onclick="disableParticipant(${participant.id})">
+Disable
+</button>
+</div>
+`;
+
+container.appendChild(card);
+});
+}
+
+
+/* =====================================================
+COLLECT STATE
+===================================================== */
+
+function collectState() {
+return participants.map(function(participant) {
+return {
+id: participant.id,
+name: participant.name,
+stage: participant.stage,
+seconds: participant.seconds,
+running: participant.running
+};
+});
+}
+
+
+/* =====================================================
+SEND STATE TO PHONE
+===================================================== */
+
+function broadcastState() {
+const message = {
+type: "state",
+state: collectState()
+};
+
+remoteConnections = remoteConnections.filter(function(connection) {
+return connection.open;
+});
+
+remoteConnections.forEach(function(connection) {
+try {
+connection.send(message);
+} catch(error) {
+console.log(error);
+}
+});
+}
+
+
+/* =====================================================
+PHONE COMMANDS
+===================================================== */
+
+function remoteCommand(command, id, value) {
+if (!remoteConnection || !remoteConnection.open) {
+document.getElementById("remoteStatus").textContent = "Not connected";
+return;
+}
+
+remoteConnection.send({
+type: "command",
+command: command,
+id: id,
+value: value
+});
+}
+
+
+/* =====================================================
+LAPTOP RECEIVES PHONE COMMAND
+===================================================== */
+
+function handleRemoteCommand(data) {
+if (!data || data.type !== "command") {
+return;
+}
+
+switch (data.command) {
+case "startAll":
+startAllOpen();
+break;
+
+case "add":
+addParticipant();
+break;
+
+case "updateName":
+updateParticipantName(data.id, data.value);
+renderLaptop();
+break;
+
+case "closed":
+startStage(data.id, CLOSED_SECONDS, "CLOSED");
+break;
+
+case "aircraft":
+startStage(data.id, AIRCRAFT_SECONDS, "AIRCRAFT");
+break;
+
+case "disable":
+disableParticipant(data.id);
+break;
+}
+}
+
+
+/* =====================================================
+PHONE REMOTE DISPLAY
+===================================================== */
+
+function renderRemote(state) {
+const container = document.getElementById("remoteParticipants");
+container.innerHTML = "";
+
+state.forEach(function(participant) {
+const card = document.createElement("div");
+card.className = "participant";
+
+let timerClass = "timer-done";
+if (participant.stage === "OPEN") {
+timerClass = "timer-open";
+} else if (participant.stage === "CLOSED") {
+timerClass = "timer-closed";
+} else if (participant.stage === "AIRCRAFT") {
+timerClass = "timer-aircraft";
+}
+
+let timerText = "--:--";
+if (participant.stage === "DISABLED") {
+timerText = "DISABLED";
+} else if (participant.stage === "DONE") {
+timerText = "DONE";
+} else if (
+participant.stage === "OPEN" ||
+participant.stage === "CLOSED" ||
+participant.stage === "AIRCRAFT"
+) {
+timerText = formatTime(participant.seconds);
+}
+
+card.innerHTML = `
+<input
+type="text"
+class="participant-name-input"
+value="${escapeHTML(participant.name)}"
+onchange="remoteCommand('updateName', ${participant.id}, this.value)"
+/>
+
+<div class="stage">
+${participant.stage}
+</div>
+
+<div class="timer ${timerClass}">
+${timerText}
+</div>
+
+<div class="participant-controls">
+<button onclick="remoteCommand('closed', ${participant.id})">
+CLOSED
+</button>
+
+<button onclick="remoteCommand('aircraft', ${participant.id})">
+AIRCRAFT
+</button>
+
+<button class="danger" onclick="remoteCommand('disable', ${participant.id})">
+Disable
+</button>
+</div>
+`;
+
+container.appendChild(card);
+});
+}
+
+
+/* =====================================================
+DISCONNECT PHONE
+===================================================== */
+
+function disconnectRemote() {
+if (remoteConnection) {
+remoteConnection.close();
+}
+location.reload();
+}
+
+
+/* =====================================================
+SECURITY / HTML ESCAPE
+===================================================== */
+
+function escapeHTML(text) {
+return String(text).replace(/[&<>"']/g, function(character) {
+return {
+"&": "&amp;",
+"<": "&lt;",
+">": "&gt;",
+'"': "&quot;",
+"'": "&#039;"
+}[character];
+});
+}
+
+
+/* =====================================================
+START ROOM AUTOMATICALLY
+===================================================== */
+
+createRoom();
+
+</script>
+
+</body>
+</html>
+
