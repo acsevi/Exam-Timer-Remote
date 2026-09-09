@@ -7,7 +7,7 @@
 <title>Aircraft Exam Timer</title>
 
 <!-- Realtime phone ↔ laptop connection -->
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 
 <style>
 
@@ -276,10 +276,6 @@ padding: 10px 5px;
 
 <body>
 
-<!-- =====================================================
-HEADER
-===================================================== -->
-
 <header>
 
 <h1>
@@ -301,9 +297,7 @@ id="roomCodeDisplay">
 </header>
 
 
-<!-- =====================================================
-LAPTOP VIEW
-===================================================== -->
+<!-- LAPTOP VIEW -->
 
 <main id="laptopView">
 
@@ -349,9 +343,7 @@ Creating room...
 </main>
 
 
-<!-- =====================================================
-PHONE REMOTE VIEW
-===================================================== -->
+<!-- PHONE REMOTE VIEW -->
 
 <main id="remoteView">
 
@@ -380,9 +372,7 @@ Connecting...
 </main>
 
 
-<!-- =====================================================
-JOIN ROOM MODAL
-===================================================== -->
+<!-- JOIN ROOM MODAL -->
 
 <div
 class="modal"
@@ -444,6 +434,16 @@ const CLOSED_SECONDS = 15 * 60;
 const AIRCRAFT_SECONDS = 30 * 60;
 const MAX_PARTICIPANTS = 22;
 
+/* Explicit STUN Configuration to fix connection blocks */
+const PEER_CONFIG = {
+config: {
+iceServers: [
+{ urls: 'stun:stun.l.google.com:19302' },
+{ urls: 'stun:stun1.l.google.com:19302' },
+{ urls: 'stun:stun2.l.google.com:19302' }
+]
+}
+};
 
 /* =====================================================
 VARIABLES
@@ -459,10 +459,6 @@ let remoteConnections = [];
 let isRemote = false;
 
 
-/* =====================================================
-RANDOM ROOM CODE
-===================================================== */
-
 function generateRoomCode() {
 return String(
 Math.floor(
@@ -471,11 +467,6 @@ Math.random() * 9000
 )
 );
 }
-
-
-/* =====================================================
-DISPLAY ROOM CODE
-===================================================== */
 
 function setRoomCode(code) {
 roomCode = code;
@@ -504,7 +495,7 @@ document.getElementById(
 "connectionStatus"
 ).textContent = "Connecting...";
 
-hostPeer = new Peer("aircraft-timer-" + code);
+hostPeer = new Peer("aircraft-timer-" + code, PEER_CONFIG);
 
 hostPeer.on("open", function() {
 document.getElementById(
@@ -542,10 +533,6 @@ document.getElementById(
 }
 
 
-/* =====================================================
-JOIN MODAL
-===================================================== */
-
 function openJoinModal() {
 document.getElementById("joinModal").classList.add("show");
 document.getElementById("roomInput").focus();
@@ -570,7 +557,7 @@ return;
 
 document.getElementById("joinMessage").textContent = "Connecting...";
 
-remotePeer = new Peer();
+remotePeer = new Peer(PEER_CONFIG);
 
 remotePeer.on("open", function() {
 remoteConnection = remotePeer.connect("aircraft-timer-" + code, {
@@ -603,10 +590,6 @@ document.getElementById("joinMessage").textContent = "Could not connect. Check t
 }
 
 
-/* =====================================================
-ADD PARTICIPANT
-===================================================== */
-
 function addParticipant() {
 if (participants.length >= MAX_PARTICIPANTS) {
 alert("Maximum participants reached.");
@@ -628,10 +611,6 @@ broadcastState();
 }
 
 
-/* =====================================================
-UPDATE PARTICIPANT NAME
-===================================================== */
-
 function updateParticipantName(id, newName) {
 const participant = participants.find(function(p) {
 return p.id === id;
@@ -643,10 +622,6 @@ broadcastState();
 }
 }
 
-
-/* =====================================================
-DISABLE PARTICIPANT
-===================================================== */
 
 function disableParticipant(id) {
 const participant = participants.find(function(p) {
@@ -664,10 +639,6 @@ renderLaptop();
 broadcastState();
 }
 
-
-/* =====================================================
-START ALL
-===================================================== */
 
 function startAllOpen() {
 participants.forEach(function(participant) {
@@ -712,10 +683,6 @@ broadcastState();
 }
 
 
-/* =====================================================
-START INDIVIDUAL STAGE
-===================================================== */
-
 function startStage(id, duration, stage, callback) {
 const participant = participants.find(function(p) {
 return p.id === id;
@@ -755,10 +722,6 @@ broadcastState();
 }
 
 
-/* =====================================================
-FORMAT TIMER
-===================================================== */
-
 function formatTime(seconds) {
 const minutes = Math.floor(seconds / 60);
 const remainingSeconds = seconds % 60;
@@ -770,10 +733,6 @@ String(remainingSeconds).padStart(2, "0")
 );
 }
 
-
-/* =====================================================
-LAPTOP DISPLAY
-===================================================== */
 
 function renderLaptop() {
 const container = document.getElementById("participants");
@@ -841,10 +800,6 @@ container.appendChild(card);
 }
 
 
-/* =====================================================
-COLLECT STATE
-===================================================== */
-
 function collectState() {
 return participants.map(function(participant) {
 return {
@@ -857,10 +812,6 @@ running: participant.running
 });
 }
 
-
-/* =====================================================
-SEND STATE TO PHONE
-===================================================== */
 
 function broadcastState() {
 const message = {
@@ -882,10 +833,6 @@ console.log(error);
 }
 
 
-/* =====================================================
-PHONE COMMANDS
-===================================================== */
-
 function remoteCommand(command, id, value) {
 if (!remoteConnection || !remoteConnection.open) {
 document.getElementById("remoteStatus").textContent = "Not connected";
@@ -900,10 +847,6 @@ value: value
 });
 }
 
-
-/* =====================================================
-LAPTOP RECEIVES PHONE COMMAND
-===================================================== */
 
 function handleRemoteCommand(data) {
 if (!data || data.type !== "command") {
@@ -939,12 +882,14 @@ break;
 }
 
 
-/* =====================================================
-PHONE REMOTE DISPLAY
-===================================================== */
-
 function renderRemote(state) {
 const container = document.getElementById("remoteParticipants");
+
+/* Prevent re-rendering input elements if currently typing */
+if (document.activeElement && document.activeElement.classList.contains("participant-name-input")) {
+return;
+}
+
 container.innerHTML = "";
 
 state.forEach(function(participant) {
@@ -1009,10 +954,6 @@ container.appendChild(card);
 }
 
 
-/* =====================================================
-DISCONNECT PHONE
-===================================================== */
-
 function disconnectRemote() {
 if (remoteConnection) {
 remoteConnection.close();
@@ -1020,10 +961,6 @@ remoteConnection.close();
 location.reload();
 }
 
-
-/* =====================================================
-SECURITY / HTML ESCAPE
-===================================================== */
 
 function escapeHTML(text) {
 return String(text).replace(/[&<>"']/g, function(character) {
@@ -1036,11 +973,6 @@ return {
 }[character];
 });
 }
-
-
-/* =====================================================
-START ROOM AUTOMATICALLY
-===================================================== */
 
 createRoom();
 
